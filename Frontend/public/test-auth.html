@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Token Auth Test</title>
+</head>
+<body>
+    <h1>Token ID Authentication Test</h1>
+    <div id="output"></div>
+    
+    <script>
+        const log = (msg) => {
+            const div = document.getElementById('output');
+            div.innerHTML += '<p>' + msg + '</p>';
+            console.log(msg);
+        };
+
+        async function testAuth() {
+            log('=== Starting Authentication Test ===');
+            
+            // Test 1: Login
+            log('<br><strong>Step 1: Testing Login...</strong>');
+            try {
+                const loginResp = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'testuser123', password: 'test123' })
+                });
+                
+                const loginData = await loginResp.json();
+                log('Login Status: ' + loginResp.status);
+                log('Login Response: ' + JSON.stringify(loginData));
+                
+                if (!loginResp.ok) {
+                    log('<span style="color:red">❌ Login failed</span>');
+                    return;
+                }
+                
+                if (loginData.tokenId) {
+                    log('<span style="color:green">✅ TokenId received: ' + loginData.tokenId + '</span>');
+                    
+                    // Store in cookie
+                    const expires = new Date();
+                    expires.setHours(expires.getHours() + 12);
+                    document.cookie = `authTokenId=${loginData.tokenId}; path=/; expires=${expires.toUTCString()}; samesite=lax`;
+                    log('✅ Cookie set');
+                    
+                    // Test 2: Access protected route
+                    log('<br><strong>Step 2: Testing Protected Route...</strong>');
+                    const meResp = await fetch('http://localhost:5000/api/auth/me', {
+                        headers: { 'x-token-id': loginData.tokenId }
+                    });
+                    
+                    const meData = await meResp.json();
+                    log('Protected Route Status: ' + meResp.status);
+                    log('Protected Route Response: ' + JSON.stringify(meData));
+                    
+                    if (meResp.ok) {
+                        log('<span style="color:green">✅ Protected route accessed successfully!</span>');
+                        log('User: ' + meData.user.username + ' - Role: ' + meData.user.role);
+                    } else {
+                        log('<span style="color:red">❌ Failed to access protected route</span>');
+                    }
+                    
+                    // Check cookie
+                    log('<br><strong>Step 3: Verifying Cookie...</strong>');
+                    const cookieMatch = document.cookie.match(new RegExp('(^| )authTokenId=([^;]+)'));
+                    if (cookieMatch) {
+                        log('<span style="color:green">✅ Cookie found: ' + cookieMatch[2] + '</span>');
+                    } else {
+                        log('<span style="color:red">❌ Cookie not found</span>');
+                    }
+                    
+                } else if (loginData.token) {
+                    log('<span style="color:orange">⚠️ Received raw token (fallback mode)</span>');
+                } else {
+                    log('<span style="color:red">❌ No token or tokenId in response</span>');
+                }
+                
+            } catch (error) {
+                log('<span style="color:red">❌ Error: ' + error.message + '</span>');
+            }
+            
+            log('<br>=== Test Complete ===');
+        }
+        
+        // Run test on page load
+        testAuth();
+    </script>
+</body>
+</html>
